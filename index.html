@@ -564,15 +564,25 @@
             prompt.classList.remove('hide');
             const unlock = () => {
                 prompt.classList.add('hide');
-                audio.muted = false;
-                audio.play().catch(() => {});
+                // Warm-up play: start muted to satisfy some browsers, then unmute
+                audio.muted = true;
+                audio.play().then(() => { audio.muted = false; }).catch(() => {});
                 window.removeEventListener('pointerstart', unlock);
+                window.removeEventListener('pointerdown', unlock);
+                window.removeEventListener('mousedown', unlock);
+                window.removeEventListener('touchstart', unlock);
+                window.removeEventListener('click', unlock);
                 window.removeEventListener('keydown', unlock);
                 prompt.removeEventListener('click', unlock);
             };
-            window.addEventListener('pointerstart', unlock, { once: true });
-            window.addEventListener('keydown', unlock, { once: true });
-            prompt.addEventListener('click', unlock, { once: true });
+            const opts = { once: true };
+            window.addEventListener('pointerstart', unlock, opts);
+            window.addEventListener('pointerdown', unlock, opts);
+            window.addEventListener('mousedown', unlock, opts);
+            window.addEventListener('touchstart', unlock, opts);
+            window.addEventListener('click', unlock, opts);
+            window.addEventListener('keydown', unlock, opts);
+            prompt.addEventListener('click', unlock, opts);
         }
 
         // Prompt user to confirm autoplay if automatic playback fails
@@ -586,13 +596,41 @@
             const audio = document.getElementById('bgm');
             if (!modal || !playBtn || !audio) return;
             modal.classList.remove('hide');
-            const onPlay = () => {
-                modal.classList.add('hide');
-                audio.muted = false;
-                audio.play().catch(() => { showUnlock(); });
-                playBtn.removeEventListener('click', onPlay);
+            const onPlay = async () => {
+                // Resume WebAudio context if present to satisfy Safari/iOS
+                try {
+                    const AC = window.AudioContext || window.webkitAudioContext;
+                    if (AC) {
+                        if (!window.__audioCtx) window.__audioCtx = new AC();
+                        if (window.__audioCtx.state === 'suspended') await window.__audioCtx.resume();
+                    }
+                } catch {}
+                // Try muted warm-up then unmute on success
+                audio.muted = true;
+                try {
+                    await audio.play();
+                    audio.muted = false;
+                    modal.classList.add('hide');
+                    playBtn.removeEventListener('click', onPlay);
+                    playBtn.removeEventListener('touchend', onPlay);
+                } catch (e) {
+                    try {
+                        audio.load();
+                        audio.muted = true;
+                        await audio.play();
+                        audio.muted = false;
+                        modal.classList.add('hide');
+                        playBtn.removeEventListener('click', onPlay);
+                        playBtn.removeEventListener('touchend', onPlay);
+                    } catch {
+                        // Last resort: show controls for manual start and keep modal/prompt
+                        audio.setAttribute('controls', '');
+                        showUnlock();
+                    }
+                }
             };
-            playBtn.addEventListener('click', onPlay, { once: true });
+            playBtn.addEventListener('click', onPlay);
+            playBtn.addEventListener('touchend', onPlay);
         }
 
         // Fallback: if external URL fails, switch to local assets/yanhuayileng.mp3
