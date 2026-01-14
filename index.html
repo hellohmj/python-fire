@@ -252,8 +252,49 @@
             font-size: clamp(18px, 4vw, 42px);
             text-shadow: 0 0 8px rgba(255, 200, 80, 0.6), 0 0 18px rgba(255, 160, 20, 0.4);
             letter-spacing: 0.12em;
+            white-space: nowrap;
             pointer-events: none;
             z-index: 5;
+        }
+    </style>
+    <style>
+        /* Audio play modal */
+        #audio-modal {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.6);
+            z-index: 10000;
+            transition: opacity 0.3s, visibility 0.3s;
+        }
+        #audio-modal.hide {
+            opacity: 0;
+            visibility: hidden;
+        }
+        #audio-modal .audio-modal__content {
+            background: rgba(10, 10, 10, 0.9);
+            border: 1px solid #444;
+            border-radius: 10px;
+            padding: 16px 22px;
+            color: #fff;
+            text-align: center;
+            min-width: 240px;
+        }
+        #audio-play-btn {
+            margin-top: 10px;
+            padding: 8px 14px;
+            font-family: "Russo One", arial, sans-serif;
+            letter-spacing: 0.06em;
+            color: #000;
+            background: #ffd54f;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        @media (min-width: 800px) {
+            #audio-play-btn:hover { filter: brightness(1.05); }
         }
     </style>
 </head>
@@ -262,6 +303,12 @@
     <!-- partial:index.partial.html -->
     <audio id="bgm" src="https://er-sycdn.kuwo.cn/f39f58b371ff1bba4fb15e62f855b45d/696741d9/resource/30106/trackmedia/M500004emQMs09Z1lz.mp3" preload="auto" autoplay loop playsinline></audio>
     <div id="audio-prompt" class="hide">🔊 点击开启音乐</div>
+    <div id="audio-modal" class="hide">
+        <div class="audio-modal__content">
+            <div class="audio-modal__text">是否开启背景音乐？</div>
+            <button id="audio-play-btn">开启音乐</button>
+        </div>
+    </div>
     <!-- SVG Spritesheet -->
     <div style="height: 0; width: 0; position: absolute; visibility: hidden;">
         <svg xmlns="http://www.w3.org/2000/svg">
@@ -528,6 +575,26 @@
             prompt.addEventListener('click', unlock, { once: true });
         }
 
+        // Prompt user to confirm autoplay if automatic playback fails
+        function promptAutoplay() {
+            showAudioModal();
+        }
+
+        function showAudioModal() {
+            const modal = document.getElementById('audio-modal');
+            const playBtn = document.getElementById('audio-play-btn');
+            const audio = document.getElementById('bgm');
+            if (!modal || !playBtn || !audio) return;
+            modal.classList.remove('hide');
+            const onPlay = () => {
+                modal.classList.add('hide');
+                audio.muted = false;
+                audio.play().catch(() => { showUnlock(); });
+                playBtn.removeEventListener('click', onPlay);
+            };
+            playBtn.addEventListener('click', onPlay, { once: true });
+        }
+
         // Fallback: if external URL fails, switch to local assets/yanhuayileng.mp3
         const FALLBACK_SRC = './assets/yanhuayileng.mp3';
         (function setupAudioFallback() {
@@ -551,8 +618,9 @@
         (function () {
             const audio = document.getElementById('bgm');
             if (!audio) return;
+            // Try autoplay with sound; if it fails, ask for confirmation
             audio.muted = false;
-            audio.play().catch(() => { showUnlock(); });
+            audio.play().catch(() => { promptAutoplay(); });
         })();
 
         // First render is called in init()
